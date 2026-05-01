@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["./admin/src", "./server/src"],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "node_modules", "dist", "build"],
+  "compilerOptions": {
+    "rootDir": ".",
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationDir": "./dist",
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "skipLibCheck": true
+  }
+}
