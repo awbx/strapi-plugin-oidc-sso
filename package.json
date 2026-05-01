@@ -11,7 +11,23 @@
     "auth"
   ],
   "license": "MIT",
+  "author": {
+    "name": "Abdelhadi Sabani",
+    "email": "asabani.work@gmail.com",
+    "url": "https://github.com/awbx"
+  },
+  "homepage": "https://github.com/awbx/strapi-plugin-oidc-sso#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/awbx/strapi-plugin-oidc-sso.git"
+  },
+  "bugs": {
+    "url": "https://github.com/awbx/strapi-plugin-oidc-sso/issues"
+  },
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "exports": {
     "./package.json": "./package.json",
     "./strapi-admin": {
