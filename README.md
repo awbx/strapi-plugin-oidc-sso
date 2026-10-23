@@ -61,6 +61,11 @@ export default ({ env }) => ({
       allowedDomains:  env.array('OIDC_ALLOWED_DOMAINS', []),
       useUserinfo:     env.bool('OIDC_USE_USERINFO', false),
 
+      // Security options
+      requireEmailVerified: env.bool('OIDC_REQUIRE_EMAIL_VERIFIED', false),
+      allowedTenantIds:     env.array('OIDC_ALLOWED_TENANT_IDS', []),
+      secureCookies:        env.bool('OIDC_SECURE_COOKIES', false),
+
       // Button branding (all optional)
       buttonLabel: env('OIDC_BUTTON_LABEL', 'Login with SSO'),
       buttonIcon:  env('OIDC_BUTTON_ICON'), // URL, data URI, or inline <svg>...</svg>
@@ -81,7 +86,7 @@ export default ({ env }) => ({
 | Field             | Required | Description |
 |-------------------|----------|-------------|
 | `issuer`          | one of   | OIDC issuer URL — used for `.well-known/openid-configuration` discovery |
-| `endpoints.*`     | one of   | Explicit endpoint overrides; any field set here wins per-field over discovery |
+| `endpoints.*`     | one of   | Explicit endpoint overrides; any field set here wins per-field over discovery. Without `issuer`, token signatures are checked against `endpoints.jwks` but the token `iss` claim is not asserted |
 | `clientId`        | yes      | OAuth client ID |
 | `clientSecret`    | yes      | OAuth client secret |
 | `redirectUri`     | yes      | Must match the URI registered with the IdP. Plugin serves `/oidc-sso/callback` |
@@ -91,11 +96,15 @@ export default ({ env }) => ({
 | `defaultRoles`    | no       | Strapi admin role codes (e.g. `strapi-super-admin`, `strapi-editor`, `strapi-author`) |
 | `allowedDomains`  | no       | If non-empty, only emails whose domain matches are allowed |
 | `useUserinfo`     | no       | If `true`, also fetches the userinfo endpoint and merges its claims |
+| `requireEmailVerified` | no | If `true`, only sign-ins whose `email_verified` claim is `true` are accepted. Default `false` |
+| `allowedTenantIds` | no      | Allow-list of tenant ids (`tid`) accepted in multi-tenant setups. If non-empty, every other tenant is rejected |
+| `secureCookies`   | no       | Forces the `Secure` flag on the state and refresh cookies. Default: the request's scheme (`ctx.secure`) |
 | `buttonLabel`     | no       | Default `Login with SSO` |
 | `buttonIcon`      | no       | Image URL, data URI, or inline `<svg>...</svg>` |
 | `buttonStyle.*`   | no       | CSS color overrides — all default to Strapi's design tokens |
 
 You must provide either `issuer` (for discovery) or all of `endpoints.{authorization, token, jwks}`.
+`scopes` must contain `openid` — without it the IdP issues no `id_token` and the sign-in cannot be verified.
 
 ## Running behind a reverse proxy
 
@@ -347,7 +356,38 @@ The handoff page is a per-request CSP-noncedened HTML response — no React rout
 | Session fixation             | Fresh Strapi access + refresh tokens issued on every successful login |
 | Disabled users               | `isActive`/`blocked` flags checked before issuing tokens          |
 | Unwanted sign-ups            | `autoCreateUsers` is `false` by default                           |
+| Unverified email addresses   | `email_verified: false` is always rejected; `requireEmailVerified` additionally demands `email_verified: true` |
+| Cross-tenant sign-in         | `allowedTenantIds` restricts multi-tenant issuers to known tenants |
 | Cookie tampering             | State cookie HMAC-signed with `ADMIN_JWT_SECRET`                  |
+
+### Verified email addresses
+
+The plugin reads the `email_verified` claim from the merged claims set — the `id_token`,
+plus the userinfo response when `useUserinfo` is enabled (both come from the IdP and are
+bound to the same authenticated session):
+
+- `email_verified: false` → the sign-in is rejected with `EMAIL_NOT_VERIFIED`, always,
+  independently of the configuration.
+- `email_verified: true` → the sign-in proceeds.
+- the claim is missing → the sign-in proceeds, unless `requireEmailVerified` is enabled.
+
+With `requireEmailVerified: true` only an explicit `email_verified: true` is accepted; a missing
+claim is treated like a failed verification. Note that not every IdP sends the claim — check yours
+before enabling it.
+
+### Multi-tenant setups
+
+An issuer such as `https://login.microsoftonline.com/common/v2.0` accepts accounts from *every*
+tenant of the IdP, and the plugin validates the tenant against the JWKS of that issuer. Any tenant
+that exists at the IdP can therefore claim an admin account on this instance. Set
+`allowedTenantIds` to the list of tenant ids you trust:
+
+```ts
+allowedTenantIds: ['11111111-2222-3333-4444-555555555555'],
+```
+
+Tenants outside the list are rejected during the token exchange. The plugin logs a warning at
+startup while a multi-tenant issuer is configured without an allow-list.
 
 ## Provider-specific quirks the plugin handles
 

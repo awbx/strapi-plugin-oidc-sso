@@ -1,9 +1,12 @@
 import { SignJWT, jwtVerify } from 'jose';
 import type { Context } from 'koa';
 import type { Core } from '@strapi/strapi';
+import type { PluginConfig } from '../types';
 
 const COOKIE_NAME = 'oidc_sso_state';
 const TTL_SECONDS = 600;
+const STATE_AUDIENCE = 'oidc-sso-state';
+const STATE_ISSUER = 'oidc-sso';
 
 type StatePayload = {
   state: string;
@@ -33,8 +36,12 @@ type StateCookieService = {
 
 export default ({ strapi }: { strapi: Core.Strapi }): StateCookieService => ({
   async set(ctx, payload) {
+    const cfg = strapi.config.get('plugin::oidc-sso') as PluginConfig;
+
     const token = await new SignJWT({ ...payload })
-      .setProtectedHeader({ alg: 'HS256' })
+      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .setAudience(STATE_AUDIENCE)
+      .setIssuer(STATE_ISSUER)
       .setIssuedAt()
       .setExpirationTime(`${TTL_SECONDS}s`)
       .sign(getKey(strapi));
@@ -42,7 +49,7 @@ export default ({ strapi }: { strapi: Core.Strapi }): StateCookieService => ({
     ctx.cookies.set(COOKIE_NAME, token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: ctx.secure,
+      secure: cfg.secureCookies ?? ctx.secure,
       maxAge: TTL_SECONDS * 1000,
       overwrite: true,
       path: '/',
@@ -54,7 +61,11 @@ export default ({ strapi }: { strapi: Core.Strapi }): StateCookieService => ({
     ctx.cookies.set(COOKIE_NAME, null, { path: '/' });
     if (!raw) return null;
     try {
-      const { payload } = await jwtVerify(raw, getKey(strapi));
+      const { payload } = await jwtVerify(raw, getKey(strapi), {
+        algorithms: ['HS256'],
+        audience: STATE_AUDIENCE,
+        issuer: STATE_ISSUER,
+      });
       const { state, nonce, codeVerifier } = payload as Record<string, unknown>;
       if (
         typeof state !== 'string' ||

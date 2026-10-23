@@ -49,6 +49,12 @@ export type PluginConfig = {
   defaultRoles: string[];
   allowedDomains: string[];
   useUserinfo: boolean;
+  /** Reject logins unless the IdP states `email_verified: true`. */
+  requireEmailVerified?: boolean;
+  /** Allow-list of tenant ids (`tid`) accepted in multi-tenant setups. Empty = allow all. */
+  allowedTenantIds?: string[];
+  /** Force the `Secure` flag on cookies, overriding the request's scheme detection. */
+  secureCookies?: boolean;
   buttonLabel: string;
   buttonIcon?: string;
   buttonStyle?: ButtonStyle;

@@ -75,12 +75,12 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
   async login(ctx: Context) {
     try {
       const oidc = strapi.plugin('oidc-sso').service('oidc-client') as {
-        getAuthorizationUrl: () => {
+        getAuthorizationUrl: () => Promise<{
           url: string;
           state: string;
           nonce: string;
           codeVerifier: string;
-        };
+        }>;
       };
       const stateCookie = strapi.plugin('oidc-sso').service('state-cookie') as {
         set: (
@@ -89,7 +89,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
         ) => Promise<void>;
       };
 
-      const { url, state, nonce, codeVerifier } = oidc.getAuthorizationUrl();
+      const { url, state, nonce, codeVerifier } = await oidc.getAuthorizationUrl();
       await stateCookie.set(ctx, { state, nonce, codeVerifier });
       ctx.redirect(url);
     } catch (err) {
@@ -162,6 +162,15 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
       if (cfg.useUserinfo && accessToken) {
         const ui = await oidc.userinfo(accessToken);
+        // The userinfo response must describe the same subject as the id_token,
+        // otherwise a mismatched response could overwrite the identity claims.
+        if (
+          typeof ui.sub !== 'string' ||
+          typeof claims.sub !== 'string' ||
+          ui.sub !== claims.sub
+        ) {
+          throw new Error('[oidc-sso] userinfo sub does not match id_token sub');
+        }
         claims = mergeClaims(claims, ui);
       }
     } catch (err) {
@@ -198,6 +207,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
           'ROLES_NOT_FOUND',
           'SESSION_MANAGER_UNAVAILABLE',
           'ACCESS_TOKEN_FAILED',
+          'EMAIL_NOT_VERIFIED',
         ].includes(code)
           ? code
           : 'INVALID_OIDC_FLOW'

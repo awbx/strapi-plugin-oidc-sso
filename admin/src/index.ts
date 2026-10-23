@@ -83,6 +83,10 @@ const ERROR_MESSAGES: Record<string, { title: string; body: string }> = {
     title: 'Could not issue access token',
     body: 'The Strapi admin session could not be created. Please try again.',
   },
+  EMAIL_NOT_VERIFIED: {
+    title: 'Email address not verified',
+    body: "Your identity provider hasn't verified this email address. Verify it and try again.",
+  },
 };
 
 const FALLBACK_MESSAGE = {

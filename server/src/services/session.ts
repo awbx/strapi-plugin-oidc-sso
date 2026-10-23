@@ -96,6 +96,8 @@ const generateAccessToken = async (
   const userId = String(user.id);
   const deviceId = randomUUID();
 
+  const cfg = strapi.config.get('plugin::oidc-sso') as PluginConfig;
+
   const { token: refreshToken } = await sessionManager('admin').generateRefreshToken(
     userId,
     deviceId,
@@ -105,7 +107,7 @@ const generateAccessToken = async (
   ctx.cookies.set(REFRESH_COOKIE_NAME, refreshToken, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: ctx.secure,
+    secure: cfg.secureCookies ?? ctx.secure,
     // Cookie paths are matched by the browser against the URL it requested, so
     // this has to carry the reverse-proxy prefix; scoping it to a bare /admin
     // behind a proxy means the cookie is never sent back and the session
@@ -125,6 +127,22 @@ export default ({ strapi }: { strapi: Core.Strapi }): SessionService => ({
   async loginOrCreate(profile, ctx) {
     const cfg = strapi.config.get('plugin::oidc-sso') as PluginConfig;
     const userService = strapi.service('admin::user') as unknown as AdminUserService;
+
+    // An IdP that explicitly says the address is unverified must never be able
+    // to create or claim an admin account with it.
+    const emailVerified = profile.rawClaims?.email_verified;
+    if (emailVerified === false) {
+      throw codedError(
+        'EMAIL_NOT_VERIFIED',
+        'the identity provider reports email_verified=false for this account'
+      );
+    }
+    if (cfg.requireEmailVerified && emailVerified !== true) {
+      throw codedError(
+        'EMAIL_NOT_VERIFIED',
+        'requireEmailVerified is enabled but the identity provider did not confirm email_verified=true'
+      );
+    }
 
     let user = await userService.findOneByEmail(profile.email);
 

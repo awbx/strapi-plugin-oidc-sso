@@ -30,6 +30,9 @@ const configSchema = z
     defaultRoles: z.array(z.string()),
     allowedDomains: z.array(z.string()),
     useUserinfo: z.boolean(),
+    requireEmailVerified: z.boolean().optional(),
+    allowedTenantIds: z.array(z.string()).optional(),
+    secureCookies: z.boolean().optional(),
     buttonLabel: z.string().min(1),
     buttonIcon: z.string().optional(),
     buttonStyle: z
@@ -53,7 +56,11 @@ const configSchema = z
       message:
         'Provide either `issuer` (for OIDC discovery) or all of endpoints.{authorization, token, jwks}.',
     }
-  );
+  )
+  .refine((cfg) => cfg.scopes.includes('openid'), {
+    message:
+      '`scopes` must include "openid" — without it the IdP returns no id_token and sign-in cannot be verified.',
+  });
 
 const defaults: Partial<PluginConfig> = {
   scopes: ['openid', 'profile', 'email'],
